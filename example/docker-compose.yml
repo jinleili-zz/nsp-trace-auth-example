@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: nsp
+      POSTGRES_PASSWORD: nsp123
+      POSTGRES_DB: nsp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nsp -d nsp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  saga-init:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DSN: postgres://nsp:nsp123@postgres:5432/nsp?sslmode=disable
+    volumes:
+      - ../nsp-platform/saga/migrations:/migrations:ro
+      - ./scripts/init-saga.sh:/init-saga.sh:ro
+    command: ["/bin/sh", "/init-saga.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  az:
+    build:
+      context: .
+      dockerfile: Dockerfile.az
+    environment:
+      POSTGRES_DSN: postgres://nsp:nsp123@postgres:5432/nsp?sslmode=disable
+      REDIS_ADDR: redis:6379
+      AZ_ADDR: :8081
+      ACCESS_KEY: example-ak
+      SECRET_KEY: example-sk-1234567890abcdef
+    depends_on:
+      saga-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      REDIS_ADDR: redis:6379
+      ACCESS_KEY: example-ak
+      SECRET_KEY: example-sk-1234567890abcdef
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  top:
+    build:
+      context: .
+      dockerfile: Dockerfile.top
+    environment:
+      AZ_URL: http://az:8081
+      TOP_ADDR: :8080
+      POSTGRES_DSN: postgres://nsp:nsp123@postgres:5432/nsp?sslmode=disable
+      ACCESS_KEY: example-ak
+      SECRET_KEY: example-sk-1234567890abcdef
+    ports:
+      - "18080:8080"
+    depends_on:
+      - az
+
+volumes:
+  postgres_data:
