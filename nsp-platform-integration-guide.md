@@ -475,51 +475,26 @@ func makeOrderHandler(cfg *config.Config) gin.HandlerFunc {
 
 ## 4. HTTP Server 提取 traceid 并通过 TaskQueue 透传（az → worker）
 
-### 4.1 Trace 信息转换为 Metadata
+### 4.1 Broker.Publish 自动透传 Trace
 
-**文件**: `nsp-platform/trace/propagator.go:146-170`
+`Broker.Publish(ctx, task)` 内部通过 `wrapWithTrace(ctx, ...)` **自动**从 `ctx` 提取 `TraceContext`，并将 `TraceID`、`SpanID`、`Sampled` 写入消息 envelope 的专属字段（`_tid`、`_sid`、`_smpl`）。调用方**无需**手动将 trace 信息放入 `task.Metadata`。
+
+`task.Metadata` 的设计目的是携带**业务级别**的 KV 元数据（如 tenant_id、request_source 等），不应用于 trace 传播。
+
+### 4.2 Az 服务发布任务（正确用法）
+
+**文件**: `example/cmd/az/main.go:177-183`
 ```go
-func MetadataFromContext(ctx context.Context) map[string]string {
-    tc, ok := TraceFromContext(ctx)
-    if !ok || tc == nil {
-        return nil
-    }
-    return MetadataFromTraceContext(tc)
-}
-
-func MetadataFromTraceContext(tc *TraceContext) map[string]string {
-    if tc == nil {
-        return nil
-    }
-    m := map[string]string{
-        "trace_id": tc.TraceID,
-        "span_id":  tc.SpanId,
-        "sampled":  "1",
-    }
-    if !tc.Sampled {
-        m["sampled"] = "0"
-    }
-    return m
-}
-```
-
-### 4.2 Az 服务发布任务时注入 Trace
-
-**文件**: `example/cmd/az/main.go:177-189`
-```go
-// Build metadata with trace info
-metadata := trace.MetadataFromContext(ctx)
-if metadata == nil {
-    metadata = map[string]string{}
-}
-
 task := &taskqueue.Task{
-    Type:     taskTypeCalc,
-    Payload:  payload,
-    Queue:    queueCalcIncoming,
-    Reply:    &taskqueue.ReplySpec{Queue: queueCalcOutgoing},
-    Metadata: metadata,
+    Type:    taskTypeCalc,
+    Payload: payload,
+    Queue:   queueCalcIncoming,
+    Reply:   &taskqueue.ReplySpec{Queue: queueCalcOutgoing},
 }
+
+// ctx 已包含 TraceContext（由 trace.TraceMiddleware 注入）
+// Publish 会自动从 ctx 提取 trace 写入 envelope，无需手动处理
+broker.Publish(ctx, task)
 ```
 
 ### 4.3 Broker 自动封装 Trace Envelope
@@ -636,8 +611,8 @@ consumer.Handle(taskTypeCalc, func(ctx context.Context, t *taskqueue.Task) error
 ```
 
 关键要点：
-- `trace.MetadataFromContext(ctx)` 将 trace 信息转换为 `map[string]string`
-- `Broker.Publish` 通过 `wrapWithTrace` 将 trace 信息封装到消息 envelope 中
+- `Broker.Publish(ctx, task)` 自动从 `ctx` 提取 trace 并封装到 envelope，调用方无需手动处理
+- `task.Metadata` 仅用于业务级别的 KV 元数据，不应用于 trace 传播
 - `Consumer` 通过 `unwrapEnvelope` 和 `injectTraceFromMetadata` 恢复 trace context
 - Worker 中的 `logger.InfoContext(ctx, ...)` 会自动包含 `trace_id` 和 `span_id`
 

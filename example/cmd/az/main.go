@@ -174,18 +174,11 @@ func makeCreateOrderHandler(cfg *config.Config) gin.HandlerFunc {
 		broker := asynqbroker.NewBrokerWithConfig(opt, asynqbroker.BrokerConfig{})
 		defer broker.Close()
 
-		// Build metadata with trace info
-		metadata := trace.MetadataFromContext(ctx)
-		if metadata == nil {
-			metadata = map[string]string{}
-		}
-
 		task := &taskqueue.Task{
-			Type:     taskTypeCalc,
-			Payload:  payload,
-			Queue:    queueCalcIncoming,
-			Reply:    &taskqueue.ReplySpec{Queue: queueCalcOutgoing},
-			Metadata: metadata,
+			Type:    taskTypeCalc,
+			Payload: payload,
+			Queue:   queueCalcIncoming,
+			Reply:   &taskqueue.ReplySpec{Queue: queueCalcOutgoing},
 		}
 
 		// Set up reply consumer before publishing
