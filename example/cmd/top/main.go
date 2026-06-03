@@ -231,6 +231,14 @@ func makeOrderHandler(cfg *config.Config) gin.HandlerFunc {
 		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
+		tc := trace.MustTraceFromContext(waitCtx)
+		logger.InfoContext(waitCtx, "submitting saga",
+			"trace_id", tc.TraceID,
+			"span_id", tc.SpanId,
+			"parent_span_id", tc.ParentSpanId,
+			"instance_id", tc.InstanceId,
+		)
+
 		txID, status, err := engine.SubmitAndWait(waitCtx, def)
 		if err != nil {
 			msg := fmt.Sprintf("saga failed: %v", err)
