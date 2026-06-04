@@ -40,11 +40,12 @@ func main() {
 
 	instanceId := trace.GetInstanceId()
 
+	// 注册中间件（必须在路由注册之前执行，中间件按注册顺序依次生效）
 	r.Use(middleware.GinRecovery())
 	r.Use(trace.TraceMiddleware(instanceId))
 	r.Use(middleware.GinLogger())
 
-	// Routes
+	// 注册路由（中间件在此之前已注册完成，所有路由都会经过上述中间件处理）
 	r.GET("/health", handler.Health)
 	r.GET("/api/query", makeQueryHandler(cfg))
 	r.POST("/api/order", makeOrderHandler(cfg))
@@ -231,8 +232,9 @@ func makeOrderHandler(cfg *config.Config) gin.HandlerFunc {
 		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		tc := trace.MustTraceFromContext(waitCtx)
+		tc, ok := trace.TraceFromContext(waitCtx)
 		logger.InfoContext(waitCtx, "submitting saga",
+			"trace_context_found", ok,
 			"trace_id", tc.TraceID,
 			"span_id", tc.SpanId,
 			"parent_span_id", tc.ParentSpanId,
