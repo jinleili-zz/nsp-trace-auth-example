@@ -45,6 +45,7 @@ services:
       AZ_ADDR: :8081
       ACCESS_KEY: example-ak
       SECRET_KEY: example-sk-1234567890abcdef
+      LOG_MODE: prod
     depends_on:
       saga-init:
         condition: service_completed_successfully
@@ -59,6 +60,7 @@ services:
       REDIS_ADDR: redis:6379
       ACCESS_KEY: example-ak
       SECRET_KEY: example-sk-1234567890abcdef
+      LOG_MODE: prod
     depends_on:
       redis:
         condition: service_healthy
@@ -73,6 +75,7 @@ services:
       POSTGRES_DSN: postgres://nsp:nsp123@postgres:5432/nsp?sslmode=disable
       ACCESS_KEY: example-ak
       SECRET_KEY: example-sk-1234567890abcdef
+      LOG_MODE: prod
     ports:
       - "18080:8080"
     depends_on:

@@ -14,6 +14,7 @@ type Config struct {
 	AzURL       string
 	AccessKey   string
 	SecretKey   string
+	LogMode     string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -27,6 +28,7 @@ func Load() *Config {
 		AzURL:       getEnv("AZ_URL", "http://localhost:8081"),
 		AccessKey:   getEnv("ACCESS_KEY", "example-ak"),
 		SecretKey:   getEnv("SECRET_KEY", "example-sk-1234567890abcdef"),
+		LogMode:     getEnv("LOG_MODE", "dev"),
 	}
 }
 

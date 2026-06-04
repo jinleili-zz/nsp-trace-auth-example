@@ -27,7 +27,7 @@ const (
 func main() {
 	cfg := config.Load()
 
-	if err := logger.Init(logger.DevelopmentConfig("worker")); err != nil {
+	if err := logger.Init(logger.ResolveConfig("worker", cfg.LogMode)); err != nil {
 		panic(err)
 	}
 	defer logger.Sync()
