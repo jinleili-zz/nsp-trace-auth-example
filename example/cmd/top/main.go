@@ -242,6 +242,7 @@ func makeOrderHandler(cfg *config.Config) gin.HandlerFunc {
 		)
 
 		txID, status, err := engine.SubmitAndWait(waitCtx, def)
+		logSagaQueryResult(ctx, engine, txID)
 		if err != nil {
 			msg := fmt.Sprintf("saga failed: %v", err)
 			if status != nil {
@@ -265,4 +266,47 @@ func makeOrderHandler(cfg *config.Config) gin.HandlerFunc {
 			TraceID: logger.TraceIDFromContext(ctx),
 		})
 	}
+}
+
+// logSagaQueryResult calls Engine.Query and prints the full status.
+// Used to demonstrate how to read back saga execution results.
+func logSagaQueryResult(ctx context.Context, engine *saga.Engine, txID string) {
+	queryCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	queryStatus, queryErr := engine.Query(queryCtx, txID)
+	if queryErr != nil {
+		logger.ErrorContext(ctx, "[Query] failed to query saga transaction",
+			"tx_id", txID,
+			logger.FieldError, queryErr,
+		)
+		return
+	}
+
+	logger.InfoContext(ctx, "[Query] saga transaction status",
+		"tx_id", queryStatus.ID,
+		"status", queryStatus.Status,
+		"current_step", queryStatus.CurrentStep,
+		"last_error", queryStatus.LastError,
+		"created_at", queryStatus.CreatedAt.Format(time.RFC3339),
+		"finished_at", formatOptionalTime(queryStatus.FinishedAt),
+		"step_count", len(queryStatus.Steps),
+	)
+
+	for _, step := range queryStatus.Steps {
+		logger.InfoContext(ctx, "[Query] saga step",
+			"step_index", step.Index,
+			"step_name", step.Name,
+			"step_status", step.Status,
+			"poll_count", step.PollCount,
+			"step_last_error", step.LastError,
+		)
+	}
+}
+
+func formatOptionalTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }

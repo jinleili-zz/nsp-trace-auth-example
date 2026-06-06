@@ -81,5 +81,22 @@ services:
     depends_on:
       - az
 
+  saga-fail-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile.sagafail
+    environment:
+      SAGA_FAIL_DEMO_ADDR: :8082
+      SAGA_FAIL_DEMO_URL: http://saga-fail-demo:8082
+      POSTGRES_DSN: postgres://nsp:nsp123@postgres:5432/nsp?sslmode=disable
+      ACCESS_KEY: example-ak
+      SECRET_KEY: example-sk-1234567890abcdef
+      LOG_MODE: prod
+    ports:
+      - "18082:8082"
+    depends_on:
+      saga-init:
+        condition: service_completed_successfully
+
 volumes:
   postgres_data:
